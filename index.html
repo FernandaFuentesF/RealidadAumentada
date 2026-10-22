@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Realidad Aumentada WebAR Optimizada</title>
+
+  <!-- Librerías estables de A-Frame y AR.js -->
+  <script src="https://aframe.io/releases/1.3.0/aframe.min.js"></script>
+  <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
+
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      user-select: none;
+    }
+
+    /* Interfaz Superior */
+    #header-ui {
+      position: fixed;
+      top: 16px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 1000;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: rgba(15, 23, 42, 0.85);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      padding: 8px 16px;
+      border-radius: 30px;
+      color: #ffffff;
+      font-size: 13px;
+      font-weight: 600;
+      backdrop-filter: blur(8px);
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+      pointer-events: none;
+    }
+
+    .dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background-color: #ef4444;
+      box-shadow: 0 0 8px #ef4444;
+      transition: all 0.3s ease;
+    }
+
+    .dot.active {
+      background-color: #22c55e;
+      box-shadow: 0 0 8px #22c55e;
+    }
+
+    /* Botón Inferior */
+    #footer-ui {
+      position: fixed;
+      bottom: 20px;
+      left: 0;
+      width: 100%;
+      display: flex;
+      justify-content: center;
+      z-index: 1000;
+    }
+
+    .btn-marker {
+      background: #0284c7;
+      color: #ffffff;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 25px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      box-shadow: 0 4px 15px rgba(2, 132, 199, 0.4);
+      transition: transform 0.2s;
+    }
+
+    .btn-marker:active {
+      transform: scale(0.95);
+    }
+
+    /* Modal del Marcador Hiro */
+    .modal {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background: rgba(0, 0, 0, 0.85);
+      backdrop-filter: blur(10px);
+      z-index: 2000;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.3s ease;
+    }
+
+    .modal.show {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .modal-box {
+      background: #1e293b;
+      padding: 20px;
+      border-radius: 16px;
+      text-align: center;
+      color: #ffffff;
+      max-width: 280px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    #hiroCanvas {
+      width: 220px;
+      height: 220px;
+      border-radius: 8px;
+      margin: 12px 0;
+      box-shadow: 0 0 15px rgba(255, 255, 255, 0.2);
+    }
+
+    .close-btn {
+      background: #ef4444;
+      color: white;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 8px;
+      font-weight: 600;
+      cursor: pointer;
+      width: 100%;
+    }
+  </style>
+
+  <script>
+    // Componente de animación fluida en JavaScript
+    AFRAME.registerComponent('spin-and-float', {
+      tick: function (time, timeDelta) {
+        if (!timeDelta) return;
+        const delta = timeDelta / 1000;
+        
+        // Rotación continua
+        const rot = this.el.getAttribute('rotation');
+        this.el.setAttribute('rotation', {
+          x: rot.x + 25 * delta,
+          y: rot.y + 40 * delta,
+          z: rot.z
+        });
+
+        // Oscilación leve (levitación)
+        const pos = this.el.getAttribute('position');
+        this.el.setAttribute('position', {
+          x: pos.x,
+          y: 0.5 + Math.sin(time / 400) * 0.1,
+          z: pos.z
+        });
+      }
+    });
+
+    window.addEventListener('load', () => {
+      const marker = document.querySelector('a-marker');
+      const statusDot = document.getElementById('statusDot');
+      const statusText = document.getElementById('statusText');
+
+      // Eventos de detección del marcador Hiro
+      marker.addEventListener('markerFound', () => {
+        statusDot.classList.add('active');
+        statusText.innerText = "¡Marcador Detectado!";
+      });
+
+      marker.addEventListener('markerLost', () => {
+        statusDot.classList.remove('active');
+        statusText.innerText = "Buscando Marcador Hiro...";
+      });
+
+      // Dibujar el Marcador Hiro perfecto en Canvas
+      renderHiroPattern();
+    });
+
+    function renderHiroPattern() {
+      const canvas = document.getElementById('hiroCanvas');
+      if (!canvas) return;
+      const ctx = canvas.getContext('2d');
+      canvas.width = 400;
+      canvas.height = 400;
+
+      // Fondo blanco exterior
+      ctx.fillStyle = '#FFFFFF';
+      ctx.fillRect(0, 0, 400, 400);
+
+      // Marco negro grueso
+      ctx.fillStyle = '#000000';
+      ctx.fillRect(40, 40, 320, 320);
+
+      // Texto "HIRO" en el centro
+      ctx.fillStyle = '#FFFFFF';
+      ctx.font = '900 64px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('HIRO', 200, 200);
+    }
+
+    function toggleModal(open) {
+      document.getElementById('hiroModal').classList.toggle('show', open);
+    }
+  </script>
+</head>
+
+<body>
+
+  <!-- UI Superior -->
+  <div id="header-ui">
+    <div id="statusDot" class="dot"></div>
+    <span id="statusText">Buscando Marcador Hiro...</span>
+  </div>
+
+  <!-- UI Inferior -->
+  <div id="footer-ui">
+    <button class="btn-marker" onclick="toggleModal(true)">
+      📷 Mostrar Marcador en Pantalla
+    </button>
+  </div>
+
+  <!-- Modal con la Imagen Oficial Generada -->
+  <div id="hiroModal" class="modal">
+    <div class="modal-box">
+      <h3 style="margin: 0; color: #38bdf8;">Marcador "Hiro"</h3>
+      <p style="font-size: 12px; color: #cbd5e1; margin-top: 6px;">
+        Muestra este recuadro frente a la cámara desde otro celular o pantalla:
+      </p>
+      
+      <canvas id="hiroCanvas"></canvas>
+      
+      <button class="close-btn" onclick="toggleModal(false)">Cerrar</button>
+    </div>
+  </div>
+
+  <!-- Escena AR interactiva -->
+  <a-scene
+    embedded
+    arjs="sourceType: webcam; debugUIEnabled: false; detectionMode: mono_and_matrix;"
+    renderer="logarithmicDepthBuffer: true; colorManagement: true;"
+    vr-mode-ui="enabled: false">
+
+    <!-- Marcador Tipo Hiro -->
+    <a-marker preset="hiro">
+      <!-- Objeto 3D animado -->
+      <a-box
+        position="0 0.5 0"
+        scale="0.8 0.8 0.8"
+        material="color: #0284c7; roughness: 0.2; metalness: 0.5;"
+        spin-and-float>
+        <!-- Marco con wireframe blanco para mejor visibilidad -->
+        <a-box 
+          scale="1.02 1.02 1.02" 
+          material="color: #ffffff; wireframe: true; wireframeLinewidth: 2">
+        </a-box>
+      </a-box>
+
+      <!-- Anillo base luminoso sobre el papel -->
+      <a-ring 
+        position="0 0.05 0" 
+        rotation="-90 0 0" 
+        radius-inner="0.6" 
+        radius-outer="0.75" 
+        material="color: #38bdf8; opacity: 0.8; shader: flat;">
+      </a-ring>
+    </a-marker>
+
+    <!-- Cámara de Realidad Aumentada -->
+    <a-entity camera></a-entity>
+
+  </a-scene>
+
+</body>
+</html>
